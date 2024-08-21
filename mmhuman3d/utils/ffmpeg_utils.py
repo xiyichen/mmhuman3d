@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
 
+import cv2, math
 import numpy as np
 
 from mmhuman3d.utils.path_utils import check_input_path, prepare_output_path
@@ -726,7 +727,10 @@ def images_to_video(input_folder: str,
         temp_input_folder = os.path.join(input_folderinfo.parent,
                                          input_folderinfo.name + '_temp')
         img_format = images_to_sorted_images(input_folder, temp_input_folder)
-
+    
+    h, w, _ = cv2.imread(f'{input_folder}/000000.png').shape
+    w_padded = math.ceil(w/2)*2
+    h_padded = math.ceil(h/2)*2
     command = [
         'ffmpeg',
         '-y',
@@ -750,8 +754,9 @@ def images_to_video(input_folder: str,
         '-pix_fmt',
         'yuv420p',
         '-an',
-        '-v',
-        'error',
+        '-vf',
+        f'pad={w_padded}:{h_padded}',
+        # 'error',
         '-loglevel',
         'error',
         output_path,
