@@ -742,7 +742,6 @@ def render_smpl(
         resolution = (resolution, resolution)
     elif isinstance(resolution, list):
         resolution = tuple(resolution)
-
     verts, poses, betas, transl = _prepare_input_pose(verts, poses, betas,
                                                       transl)
 
@@ -875,7 +874,8 @@ def render_smpl(
                 save_meshes_as_objs(meshes=mesh_person, files=obj_paths)
 
     vertices = meshes.verts_padded().view(num_frames, num_person, -1, 3)
-
+    import pdb
+    pdb.set_trace()
     # prepare camera matrixs
     if Ks is not None:
         projection = 'perspective'
@@ -888,6 +888,8 @@ def render_smpl(
         K = K.repeat(num_frames * num_person, 1, 1)
 
         Ks = K.inverse() @ Ks @ K
+        import pdb
+        pdb.set_trace()
         vertices = vertices.view(num_frames * num_person, -1, 3)
         if T is None:
             T = torch.zeros(num_frames, num_person, 1, 3)
@@ -994,7 +996,8 @@ def render_smpl(
         is_perspective = False
     if projection in ['fovperspective', 'fovorthographics', 'weakperspective']:
         assert in_ndc
-
+    import pdb
+    pdb.set_trace()
     K, R, T = convert_camera_matrix(
         convention_dst='pytorch3d',
         K=K,
@@ -1114,10 +1117,10 @@ def visualize_smpl_hmr(cam_transl,
         R=None,
         orig_cam=None,
     )
+    
     if isinstance(cam_transl, np.ndarray):
         cam_transl = torch.Tensor(cam_transl)
-    T = torch.cat([
-        cam_transl[..., [1]], cam_transl[..., [2]], 2 * focal_length /
+    T = torch.cat([cam_transl[..., [1]], cam_transl[..., [2]], 2 * focal_length /
         (det_width * cam_transl[..., [0]] + 1e-9)
     ], -1)
     for k in func.keywords.keys():
