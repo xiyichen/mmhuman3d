@@ -4,19 +4,36 @@ import torch
 from human_body_prior.body_model.body_model import BodyModel
 import os, json, shutil
 
+def get_center_and_diag(cam_centers):
+    cam_centers = np.hstack(cam_centers)
+    avg_cam_center = np.mean(cam_centers, axis=1, keepdims=True)
+    center = avg_cam_center
+    dist = np.linalg.norm(cam_centers - center, axis=0, keepdims=True)
+    diagonal = np.max(dist)
+    return center.flatten(), diagonal
+
+bboxes = np.load('./result/inference_result.npz', allow_pickle=True)['bboxes_xyxy']
+Ks = convert_bbox_to_intrinsic(bboxes, bbox_format='xyxy')
 out_dir = '../neuman_preprocessed/bike'
+num_views = len(Ks)
+train_views = int(num_views*0.9)
 
 smpl_out_dir = os.path.join(out_dir, 'models')
 if not os.path.exists(smpl_out_dir):
     os.makedirs(smpl_out_dir)
 
-bboxes = np.load('./result/inference_result.npz', allow_pickle=True)['bboxes_xyxy']
-Ks = convert_bbox_to_intrinsic(bboxes, bbox_format='xyxy')
+if not os.path.exists(os.path.join(out_dir, 'train')):
+    os.makedirs(os.path.join(out_dir, 'train'))
+if not os.path.exists(os.path.join(out_dir, 'test')):
+    os.makedirs(os.path.join(out_dir, 'test'))
+
 smpl_dict = np.load('./result/inference_result.npz', allow_pickle=True)['smpl'].reshape(-1)[0]
 
 global_orient = smpl_dict['global_orient'].reshape(-1, 3)
 poses = smpl_dict['body_pose'].reshape(-1, 23*3)
 betas = smpl_dict['betas'].reshape(-1, 10)
+# import pdb
+# pdb.set_trace()
 # verts, poses, betas, transl = _prepare_input_pose(None, np.concatenate([global_orient, poses], axis=-1), betas, None)
 
 # body_model = _prepare_body_model(None, {'model_path': 'data/body_models/', 'type': 'smpl'})
@@ -29,9 +46,10 @@ betas = smpl_dict['betas'].reshape(-1, 10)
 body_model = BodyModel(bm_path='./data/body_models/smpl/SMPL_NEUTRAL.pkl', num_betas=10, batch_size=1).cuda()
 
 faces = np.load('../3dgs-avatar-release/body_models/misc/faces.npz')['faces']
-cam_names = list(range(0, 104))
+cam_names = list(range(0, num_views))
 cam_names = [str(cam_name) for cam_name in cam_names]
 all_cam_params = {'all_cam_names': cam_names}
+cam_centers = []
 for cam_idx, cam_name in enumerate(cam_names):
     K = np.eye(3)
     K[0][0] = 5000
@@ -48,6 +66,8 @@ for cam_idx, cam_name in enumerate(cam_names):
     pred_cam = np.load('./result/inference_result.npz', allow_pickle=True)['pred_cams'][cam_idx]
 
     T = np.array([pred_cam[1], pred_cam[2], 5000 / (112 * pred_cam[0] + 1e-9)])
+    cam_center = -R.T@T.reshape(3,1)
+    cam_centers.append(cam_center)
     
     body = body_model(betas=torch.tensor(betas[cam_idx].reshape(1,-1)).cuda())
     minimal_shape = body.v.detach().cpu().numpy()[0]
@@ -86,12 +106,19 @@ for cam_idx, cam_name in enumerate(cam_names):
              pose_body=poses[cam_idx][:63],
              pose_hand=poses[cam_idx][63:])
     
-    cam_out_dir = os.path.join(out_dir, cam_name)
-    if not os.path.exists(cam_out_dir):
-        os.makedirs(cam_out_dir)
     cam_params = {'K': K.tolist(), 'D': D.tolist(), 'R': R.tolist(), 'T': T.reshape(3,1).tolist()}
     all_cam_params.update({cam_name: cam_params})
-    shutil.copy(f'../bike/all_rgb/{str(cam_idx).zfill(5)}.jpg', os.path.join(cam_out_dir, '{:06d}.jpg'.format(cam_idx)))
-    shutil.copy(f'../bike/all_rgb/{str(cam_idx).zfill(5)}.png', os.path.join(cam_out_dir, '{:06d}.png'.format(cam_idx)))
+    if cam_idx < train_views:
+        shutil.copy(f'../bike/all_rgb/{str(cam_idx).zfill(5)}.jpg', os.path.join(os.path.join(out_dir, 'train'), '{:06d}.jpg'.format(cam_idx)))
+        shutil.copy(f'../bike/all_rgb/{str(cam_idx).zfill(5)}.png', os.path.join(os.path.join(out_dir, 'train'), '{:06d}.png'.format(cam_idx)))
+    else:
+        shutil.copy(f'../bike/all_rgb/{str(cam_idx).zfill(5)}.jpg', os.path.join(os.path.join(out_dir, 'test'), '{:06d}.jpg'.format(cam_idx)))
+        shutil.copy(f'../bike/all_rgb/{str(cam_idx).zfill(5)}.png', os.path.join(os.path.join(out_dir, 'test'), '{:06d}.png'.format(cam_idx)))
+
+cam_centers = np.array(cam_centers)
+center, diagonal = get_center_and_diag(cam_centers)
+radius = diagonal * 1.1
+print(radius)
+# exit()
 with open(os.path.join(out_dir, 'cam_params.json'), 'w') as f:
         json.dump(all_cam_params, f)

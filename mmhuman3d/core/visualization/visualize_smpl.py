@@ -874,8 +874,7 @@ def render_smpl(
                 save_meshes_as_objs(meshes=mesh_person, files=obj_paths)
 
     vertices = meshes.verts_padded().view(num_frames, num_person, -1, 3)
-    import pdb
-    pdb.set_trace()
+    
     # prepare camera matrixs
     if Ks is not None:
         projection = 'perspective'
@@ -888,8 +887,7 @@ def render_smpl(
         K = K.repeat(num_frames * num_person, 1, 1)
 
         Ks = K.inverse() @ Ks @ K
-        import pdb
-        pdb.set_trace()
+        
         vertices = vertices.view(num_frames * num_person, -1, 3)
         if T is None:
             T = torch.zeros(num_frames, num_person, 1, 3)
@@ -996,8 +994,7 @@ def render_smpl(
         is_perspective = False
     if projection in ['fovperspective', 'fovorthographics', 'weakperspective']:
         assert in_ndc
-    import pdb
-    pdb.set_trace()
+    
     K, R, T = convert_camera_matrix(
         convention_dst='pytorch3d',
         K=K,
